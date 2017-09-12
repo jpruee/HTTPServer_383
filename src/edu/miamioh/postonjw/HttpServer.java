@@ -3,7 +3,8 @@ package edu.miamioh.postonjw;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -33,8 +34,8 @@ import java.util.logging.SimpleFormatter;
 
 public class HttpServer {
 
-	DataInputStream in = null;
-	DataOutputStream out = null;
+	InputStream in = null;
+	OutputStream out = null;
 	ServerSocket servSock = null;
 	Socket clientSock = null;
 	private static Logger LOGGER = Logger.getLogger("info");
@@ -51,12 +52,12 @@ public class HttpServer {
 		}
 		// no port given
 		catch(ArrayIndexOutOfBoundsException e) {
-			LOGGER.log(Level.SEVERE, "No port given (first arg)", e);
+			System.err.println("Error opening server...No port provided");
 			System.exit(1);
 		}
 		// non-integer port given
 		catch(NumberFormatException e) {
-			LOGGER.log(Level.SEVERE, "Error parsing port (first arg): must be an int", e);
+			System.err.println("Error opening server...Non-integer port provided");
 			System.exit(1);
 		}
 		HttpServer server = new HttpServer(port);
@@ -72,7 +73,7 @@ public class HttpServer {
 			fh.setFormatter(formatter);
 		} 
 		catch (Exception e) {
-			System.err.println("Error - can't open log file");
+			System.err.println("Error...can't open log file");
 		}
 		this.port = port;
 	}
@@ -82,7 +83,7 @@ public class HttpServer {
 		// server initialization phase
 		try {
 			servSock = new ServerSocket(port);
-			LOGGER.info("Opened server on port " + port);
+			LOGGER.info("Opened server on port " + port + "\n");
 		} catch (IOException e) {
 			LOGGER.log(Level.SEVERE, "error opening server socket", e);
 			System.exit(1); // exit if server socket cannot open during initialization phase
@@ -93,20 +94,18 @@ public class HttpServer {
 			try {
 				connect();
 				String request = getRequest();
-				processRequest(request);
-				
-			} catch (IOException e) {
+				processRequest(request);	
+			} 
+			catch (IOException e) {
 				LOGGER.log(Level.SEVERE,"error during connection, disconnecting client", e);
 				
 				try {
-					/* 
-					 * If any exception is encountered during runtime, 
-					 * server ends connection to that client
-					 */
-					clientSock.close();
+					out.write(("HTTP/1.1 500 INTERNAL ERROR\r\nContent-Type: text/text\r\n\r\n" + 
+					          "A server error occurred\r\n\r\n").getBytes());
+					out.flush();
 				} 
 				catch (IOException e1) {
-					LOGGER.log(Level.SEVERE, "error closing client connection", e1);
+					LOGGER.log(Level.SEVERE, "error sending server error to client", e1);
 				}
 			}
 			finally {
@@ -170,16 +169,7 @@ public class HttpServer {
 			out.write(response.getBytes());
 		}
 		else { // it's incorrect! Return HTTP error msg
-			
-			LOGGER.info("Received invalid request from client:\n" + request);
-			
-			// headers
-			response += "HTTP/1.1 500 INTERNAL ERROR\r\n";
-			response += "Content-Type: text/text\r\n\r\n";
-			
-			// body
-			response += "A server error occurred:\nOnly GET and POST requests are allowed.\r\n\r\n";
-			out.write(response.getBytes());
+			throw new IOException("Received invalid request from client");
 		}
 		out.flush();
 	}
@@ -210,6 +200,7 @@ public class HttpServer {
 		clientSock = servSock.accept();
 		LOGGER.info("Client with IP: " + servSock.getInetAddress().getHostAddress() + " connected\n");
 		
+		// since these are declared as Input/OutputStream at the start, I am using the Input/OutputStream methods due to polymorphism
 		in = new DataInputStream(clientSock.getInputStream());
 		out = new DataOutputStream(clientSock.getOutputStream());
 
